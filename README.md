@@ -7,7 +7,7 @@ Multi-agent inference framework for RTL code generation with LLM cross-verificat
 
 ChipMATE pairs a **Verilog-generating agent** with a **Python reference-model agent** that mutually verify each other's outputs on random stimuli. The two agents iteratively refine their code through cross-verification feedback until they agree. No golden testbench, no human spec annotations, no API dependency at deployment time.
 
-**No golden testbench.** Many prior RTL generation works rely on a pre-written golden testbench for verification, which is rarely available in real chip design workflows. ChipMATE never uses one, making the framework directly applicable to industry settings where only a natural-language specification exists.
+**No golden testbench.** Many prior RTL generation workflows rely on a pre-written golden testbench for iterative self-correction, which is rarely available in real chip design workflows. ChipMATE never uses golden testbenches when generating codes, making the framework directly applicable to industry settings where only a natural-language specification exists.
 
 **Interface I/O signals.** In real chip design, port names and bit-widths are formally specified before RTL implementation begins. To reflect this, ChipMATE conditions its prompts on a structured interface specification. Since benchmarks do not provide one, we extract the module port declaration from the golden Verilog file. No implementation logic is ever read to guarantee fairness.
 
