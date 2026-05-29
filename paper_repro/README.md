@@ -52,6 +52,17 @@ Two paper-fair levers are added on top of the stock chipmate framework:
 
 5. For CVDP cid003: download from HuggingFace
    (`nvidia/cvdp-benchmark-dataset` — the cid003 verilog subset, 78 problems).
+   The CVDP cocotb testbenches require a `ps`-precision iverilog build and
+   runtime plusargs; `cvdp/eval_cvdp_verilog.py` handles both (it builds with
+   `timescale=("1ns","1ps")` so `Timer(..., units='ps')` is representable, and
+   auto-injects `+NAME=value` for every `cocotb.plusargs["NAME"]` the harness
+   reads). With cocotb 2.x you may also need the 1.x compat shims:
+   ```python
+   # cocotb/sim_time_utils.py
+   from cocotb.utils import get_sim_time   # noqa
+   # append to cocotb/result.py
+   class TestFailure(AssertionError): pass  # if missing
+   ```
 
 ## One-command reproduction
 
@@ -81,8 +92,16 @@ python3 chipbench/chipbench_framework_subsets.py
 python3 chipbench/chipbench_score.py
 
 # CVDP cid003 (78, ~30 min)
-python3 cvdp/extract_cvdp_refsv.py
-python3 cvdp/cvdp_framework.py --ref-sv-json /tmp/cvdp_refsv.json
+export CVDP_BENCH=/path/to/cvdp_bench_verilog_VTRACK_cid003.jsonl
+python3 cvdp/cvdp_framework.py --temperature 1.0 --n-inner 10 --max-turns 5 \
+    --out-name chipmate-9b-repro__cvdp_cid003
+python3 cvdp/eval_cvdp_verilog.py \
+    --bench $CVDP_BENCH \
+    --rollouts ./cvdp_repro/chipmate-9b-repro__cvdp_cid003.jsonl \
+    --out      ./cvdp_repro/chipmate-9b-repro__cvdp_cid003.scored.jsonl \
+    --parallel 8 --timeout 300
+# (optional) extract_cvdp_refsv.py mines port widths from a prior run to give
+# cross_verify proper stub widths; pass via --ref-sv-json on a second pass.
 ```
 
 ## Inference parameters

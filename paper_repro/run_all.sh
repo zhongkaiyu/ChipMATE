@@ -26,10 +26,14 @@ python3 chipbench/chipbench_framework_subsets.py
 python3 chipbench/chipbench_score.py
 
 echo; echo "[4/4] CVDP cid003 (~30 min)"
-python3 cvdp/extract_cvdp_refsv.py
-python3 cvdp/cvdp_framework.py --ref-sv-json /tmp/cvdp_refsv.json \
-    --n-samples 5 --n-inner 5 --max-turns 3 \
-    --out-name chipmate-9b-repro__cvdp_cid003
+: "${CVDP_BENCH:?set CVDP_BENCH to the cid003 verilog jsonl path}"
+python3 cvdp/cvdp_framework.py --temperature 1.0 --n-inner 10 --max-turns 5 \
+    --n-samples 5 --out-name chipmate-9b-repro__cvdp_cid003
+python3 cvdp/eval_cvdp_verilog.py \
+    --bench "$CVDP_BENCH" \
+    --rollouts ./cvdp_repro/chipmate-9b-repro__cvdp_cid003.jsonl \
+    --out      ./cvdp_repro/chipmate-9b-repro__cvdp_cid003.scored.jsonl \
+    --parallel 8 --timeout 300
 
 echo
 echo "================================================================"

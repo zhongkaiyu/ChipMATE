@@ -92,13 +92,13 @@ def synth_ref_sv(toplevel, ports):
 
 
 def main():
-    bench_path = '/home/yichen/workspace/LLaMA-Factory/data/cvdp_bench_verilog_VTRACK_cid003.jsonl'
-    rollout_paths = [
-        '/ssd2/yichen/paper_eval/rollouts/chipmate-9b-framework-v3__cvdp_cid003.jsonl',
-        '/ssd2/yichen/paper_eval/rollouts/chipmate-9b-framework-v2__cvdp_cid003.jsonl',
-        '/ssd2/yichen/paper_eval/rollouts/chipmate-9b-framework__cvdp_cid003.jsonl',
-    ]
-    out_path = '/ssd2/yichen/paper_eval/cvdp_refsv.json'
+    import os
+    bench_path = os.environ.get('CVDP_BENCH', 'cvdp_bench_verilog_VTRACK_cid003.jsonl')
+    # Prior candidate rollouts to mine port widths from. On a first run with no
+    # prior rollouts, this list can be empty — the framework then falls back to
+    # harness-derived synth ref_sv. Set CVDP_PRIOR_ROLLOUTS (colon-separated).
+    rollout_paths = [p for p in os.environ.get('CVDP_PRIOR_ROLLOUTS', '').split(':') if p]
+    out_path = os.environ.get('CVDP_REFSV_OUT', '/tmp/cvdp_refsv.json')
 
     bench = {}
     with open(bench_path) as f:

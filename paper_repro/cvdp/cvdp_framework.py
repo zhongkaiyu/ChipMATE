@@ -21,14 +21,14 @@ import argparse, json, os, re, sys, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
 
-sys.path.insert(0, '/ssd2/yichen/ChipMATE')
-
 from chipmate.backends import OpenAICompatBackend
 from chipmate.inference import run_problem
 
 
-BENCH = '/home/yichen/workspace/LLaMA-Factory/data/cvdp_bench_verilog_VTRACK_cid003.jsonl'
-OUT_DIR = '/ssd2/yichen/paper_eval/rollouts'
+# CVDP cid003 verilog bench (78 problems). Override with CVDP_BENCH env var.
+BENCH = os.environ.get('CVDP_BENCH',
+                       'cvdp_bench_verilog_VTRACK_cid003.jsonl')
+OUT_DIR = os.environ.get('CVDP_OUT_DIR', './cvdp_repro')
 OUT_NAME = 'chipmate-9b-framework__cvdp_cid003'
 
 V_URL = 'http://localhost:8001/v1'
@@ -177,13 +177,14 @@ def wrap_for_cocotb(verilog_raw, expected_toplevel):
     return f'```verilog\n{verilog_raw}\n```'
 
 
-def run_one_sample(task_id, question, ref_sv, v_backend, p_backend, n_inner, max_turns, seed, num_verify_tests):
+def run_one_sample(task_id, question, ref_sv, v_backend, p_backend, n_inner, max_turns, seed, num_verify_tests, temperature=0.6):
     try:
         r = run_problem(
             task_id=task_id, question=question, ref_sv=ref_sv,
             v_backend=v_backend, p_backend=p_backend,
             n=n_inner, max_turns=max_turns,
             num_verify_tests=num_verify_tests,
+            temperature=temperature,
             seed=seed,
         )
         return r.verilog
@@ -202,6 +203,7 @@ def main():
     ap.add_argument('--limit', type=int, default=0, help='process first N problems (0=all)')
     ap.add_argument('--only', default='', help='comma list of problem_ids; empty=all')
     ap.add_argument('--out-name', default=OUT_NAME)
+    ap.add_argument('--temperature', type=float, default=0.6, help='sampling temperature; chipmate default 0.6, paper says 1.0')
     ap.add_argument('--ref-sv-json', default='',
                     help='path to {problem_id: ref_sv_text} JSON; if set, used in place of synth_ref_sv (proper port widths from prior candidates)')
     args = ap.parse_args()
@@ -268,6 +270,7 @@ def main():
             pool.submit(
                 run_one_sample, tid, q, rsv, v_backend, p_backend,
                 args.n_inner, args.max_turns, s, args.num_verify_tests,
+                args.temperature,
             ): (tid, s) for (tid, s, q, rsv) in jobs
         }
         for fut in as_completed(futs):
@@ -301,7 +304,7 @@ def main():
             samples = [{'sample_idx': i, 'completion': by_idx[i]} for i in sorted(by_idx)]
             f.write(json.dumps({'problem_id': tid, 'samples': samples}) + '\n')
     print(f'\nDONE — {agg_out}', file=sys.stderr)
-    print(f'Next: python3 /home/yichen/workspace/LLaMA-Factory/scripts/eval_cvdp_verilog.py \\\n'
+    print(f'Next: python3 eval_cvdp_verilog.py \\\n'
           f'         --bench {BENCH} \\\n'
           f'         --rollouts {agg_out} \\\n'
           f'         --out {agg_out.replace(".jsonl", ".scored.jsonl")} \\\n'
