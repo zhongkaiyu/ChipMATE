@@ -20,9 +20,9 @@ Pass@1 / pass@5 (%) for Verilog generation, taken from Table 1 of our paper:
 | GPT-4o | – | 64.1 / 73.7 | 56.5 / 70.3 | 20.0 / 33.3 | 39.0 / 40.4 |
 | GPT-5.5 | – | 84.7 / 90.4 | 63.2 / 68.0 | 30.7 / 36.7 | 44.0 / 48.7 |
 | Claude Opus 4.7 | – | 86.9 / 90.4 | 64.8 / 68.0 | 31.3 / 46.7 | 42.8 / 47.9 |
-| DeepSeek Coder | 236B | 68.5 / 80.8 | 67.6 / 70.0 | 16.7 / 30.0 | 22.3 / 37.2 |
+| DeepSeek Coder | 236B | 68.5 / 80.8 | 57.6 / 70.0 | 16.7 / 30.0 | 22.3 / 37.2 |
 | DeepSeek V4 | 1.6T | 67.3 / 80.1 | 58.8 / 66.0 | 18.0 / 36.7 | 21.5 / 34.6 |
-| DeepSeek R1 | 671B | 77.5 / 84.7 | 64.7 / 75.8 | 26.7 / 40.0 | 20.7 / 42.1 |
+| DeepSeek R1 | 671B | 77.5 / 84.7 | 64.7 / 75.8 | 26.7 / 40.0 | 27.7 / 42.1 |
 | CodeV-R1 (distill) | 7B | 65.2 / 75.2 | 57.2 / 71.9 | 13.3 / 26.7 | 26.2 / 42.1 |
 | CodeV-R1 | 7B | 68.8 / 78.2 | 68.0 / **78.2** | 30.0 / 40.0 | 26.8 / 43.3 |
 | Qwen3.5-4B (base) | 4B | 41.7 / 60.9 | 34.3 / 49.7 | 6.7 / 10.0 | 11.8 / 13.9 |
@@ -32,6 +32,19 @@ Pass@1 / pass@5 (%) for Verilog generation, taken from Table 1 of our paper:
 
 `ChipMATE-Agents-X` is the full multi-agent system you get when you run this repo — Verilog and Python agents cooperating via cross-verification.
 
+## Paper protocol (Table 1)
+
+One configuration produces every agentic row in Table 1. To reproduce a Table 1 number, use exactly these settings — they are what the commands in this README pass:
+
+| Setting | Value | CLI flag |
+|---|---|---|
+| Candidate (V, P) pairs per turn | **N = 3** (Best-of-3) | `-n 3` |
+| Max cross-verification turns | **T = 3** | `-t 3` |
+| Random stimuli per cross-verify call | **1000** | `--num-verify-tests 1000` |
+| Sampling temperature | **1.0** | `--temperature 1.0` |
+| Responses per problem (pass@k scoring) | 10 independent workflow runs, unbiased pass@k estimator | run the CLI 10× with distinct `--seed` |
+
+The API baseline rows in Table 1 (GPT/Claude/DeepSeek/CodeV-R1) are **single-pass generations** — one sampled response per query per run under the same 10-run pass@k protocol — not the multi-agent workflow.
 
 ## Install
 
@@ -89,13 +102,14 @@ result = run_problem(
     ref_sv="module top_module(input clk, ...);\nendmodule\n",
     v_backend=v_backend,
     p_backend=p_backend,
-    # Defaults: n=10 candidate (V,P) pairs per turn, max_turns=5.
+    # Paper protocol (Table 1):
+    n=3, max_turns=3, num_verify_tests=1000, temperature=1.0,
 )
 print(result.verilog)             # final Verilog implementation
 print(result.matched)             # True iff cross-verify reached match_rate == 1.0
 ```
 
-**Step 2b — reproduce the paper's VerilogEval V2 pass@1 from the command line.**
+**Step 2b — reproduce the paper's VerilogEval V2 pass@1 from the command line.** The paper's reported configuration is Best-of-3 over 3 turns with 1000 stimuli per cross-check (see [Paper protocol](#paper-protocol-table-1)):
 
 ```bash
 chipmate \
@@ -108,7 +122,7 @@ chipmate \
   --p-model      core12345/ChipMATE-P-9B \
   --p-base-url   http://localhost:8002/v1 \
   --p-api-key    dummy \
-  -n 10 -t 5 \
+  -n 3 -t 3 --num-verify-tests 1000 --temperature 1.0 \
   --workers 4
 ```
 
@@ -118,7 +132,7 @@ The CLI is just a batch driver around `run_problem`. The input JSONL has one `{t
 
 ### Option B. Drive ChipMATE with a hosted LLM API (OpenAI / DeepSeek / Claude / Gemini)
 
-If you don't want to host the weights, you can use any frontier API as both agents. This is the path used to produce the API-based rows in the table (GPT-4o, Claude Opus, DeepSeek V4 / R1, …).
+If you don't want to host the weights, you can use any frontier API as both agents. Note: the API-based rows in the benchmark table above are **single-pass baselines** (one sampled response per query, per the paper's protocol) — this Option B path is a convenience for running the ChipMATE workflow with hosted models, not how those baseline rows were produced.
 
 **Step 1 — pick a provider and run one problem.**
 
@@ -161,15 +175,15 @@ chipmate \
   --model    deepseek-chat \
   --base-url https://api.deepseek.com \
   --api-key  $DEEPSEEK_API_KEY \
-  -n 10 -t 5 \
+  -n 3 -t 3 --num-verify-tests 1000 \
   --workers 4
 ```
 
 ---
 
-## Defaults
+## Defaults vs. paper protocol
 
-`n=10` and `max_turns=5` are the defaults. Lower `--n` to cut sampling cost; raise `--max-turns` to give the agents more chances to converge on hard problems.
+The package defaults (`n=10`, `max_turns=5`, `num_verify_tests=30`) are a **fast exploratory setting** for interactive use — they are *not* the paper's configuration. Every Table 1 agentic number uses the paper protocol above: `-n 3 -t 3 --num-verify-tests 1000 --temperature 1.0` (Best-of-3, T=3, selected in the paper's inference-parameter sweep). Always pass these flags explicitly when reproducing or comparing against the paper.
 
 ## Docker
 
@@ -185,7 +199,7 @@ docker run --rm \
     --provider openai-compat \
     --model    deepseek-chat \
     --base-url https://api.deepseek.com \
-    -n 10 -t 5
+    -n 3 -t 3 --num-verify-tests 1000
 ```
 
 The image ships `iverilog` so you don't need to install it on the host.
